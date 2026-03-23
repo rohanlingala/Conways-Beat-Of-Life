@@ -1,3 +1,4 @@
+// Function to update the state of cells based on Conway's logic
 export function updateGrid ( rows )
 {
     const numRows = rows.length;
@@ -23,8 +24,8 @@ export function updateGrid ( rows )
             // Otherwise, the cell remains in its current state.
         }
     }
+    return rows
 }
-
 function countAliveNeighbors ( grid, x, y )
 {
     const numRows = grid.length;
@@ -56,21 +57,3 @@ function countAliveNeighbors ( grid, x, y )
     return count;
 }
 
-export function startGridUpdate ( interval, gridUpdateInterval, rows )
-{
-    // Clear any existing interval
-    clearInterval( gridUpdateInterval );
-    // Set a new interval to update the grid
-    gridUpdateInterval = setInterval( () =>
-    {
-        const updatedRows = updateGrid( rows ); // Call updateGrid function with rows
-        rows = updatedRows; // Update the rows variable with the new grid
-    }, interval );
-    return gridUpdateInterval; // Return the interval ID
-}
-
-
-export function stopGridUpdate ( gridUpdateInterval )
-{
-    clearInterval( gridUpdateInterval );
-}

@@ -1,46 +1,40 @@
 <script>
   import { scale } from "svelte/transition";
   import { updateGrid } from "./conway_logic.js";
-  import { startGridUpdate } from "./conway_logic.js";
-  import { stopGridUpdate } from "./conway_logic.js";
+  import { onMount } from "svelte";
   import * as Tone from "tone";
+  import { writable } from "svelte/store";
 
   let bpm = 120;
   let beat = 0;
   let isPlaying = false;
   let gridUpdateInterval; //grid update interval ID
-  const updateInterval = (16 / bpm) * 2 * 60 * 1000;
-  let snare = new Tone.Player(
-    "./src/assets/Speed Racer Snare.wav",
-  ).toDestination();
+  $: updateInterval = (16 / bpm) * 60 * 1000;
+  let snare = new Tone.Player("/assets/Speed Racer Snare.wav").toDestination()
   snare.volume.value = 24;
 
   const samplers = [
-    new Tone.Player("./src/assets/Alien kick.wav").toDestination(),
-    snare.toDestination(),
-    new Tone.Player("./src/assets/CD Rip.wav").toDestination(),
-    new Tone.Player("./src/assets/GimmeSynth Bass.wav").toDestination(),
-    new Tone.Player("./src/assets/Glass E.wav").toDestination(),
-    new Tone.Player("./src/assets/Flange Open Hat.wav").toDestination(),
-    new Tone.Player("./src/assets/missed call.wav").toDestination(),
+    new Tone.Player("/assets/Glass E.wav",).toDestination(),
+    snare,
+    new Tone.Player("/assets/CD Rip.wav").toDestination(),
+    new Tone.Player("/assets/GimmeSynth Bass.wav").toDestination(),
+    new Tone.Player("/assets/Buddy Clap.wav").toDestination(),
+    new Tone.Player("/assets/Flange Open Hat.wav").toDestination(),
+    new Tone.Player("/assets/Jeleous_Hat.wav").toDestination(),
   ];
 
   // Dorian scale notes
   const scaleOfNotes = [
-    "./src/assets/Alien kick.wav",
-    "./src/assets/Speed Racer Snare.wav",
-    "./src/assets/CD Rip.wav",
-    "./src/assets/GimmeSynth Bass.wav",
-    "./src/assets/Glass E.wav",
-    "./src/assets/Flange Open Hat.wav",
-    "./src/assets/missed call.wav",
+    "/assets/Glass E.wav",
+    "/assets/Speed Racer Snare.wav",
+    "/assets/CD Rip.wav",
+    "/assets/GimmeSynth Bass.wav",
+    "/assets/Buddy Clap.wav",
+    "/assets/Flange Open Hat.wav",
+    "/assets/Jeleous_Hat.wav",
   ];
 
-  let rows = [
-    Array.from({ length: 16 }, (_, i) => ({
-      note: scaleOfNotes[6],
-      active: false,
-    })),
+  let rows = writable([
     Array.from({ length: 16 }, (_, i) => ({
       note: scaleOfNotes[5],
       active: false,
@@ -61,37 +55,58 @@
       note: scaleOfNotes[1],
       active: false,
     })),
-  ];
+    Array.from({ length: 16 }, (_, i) => ({
+      note: scaleOfNotes[0],
+      active: false,
+    })),
+  ]);
 
   let beatIndicators = Array.from({ length: 16 }, (_, i) => i);
 
-  Tone.Transport.scheduleRepeat((time) => {
-    rows.forEach((row, index) => {
-      let sampler = samplers[index];
-      let note = row[beat];
-      if (note.active)
-        //sampler.volume.value = -6;
-        sampler.start(time, "16n");
-      //triggerAttackRelease(note.note, "16n", time);
-    });
-    beat = (beat + 1) % 16;
-  }, "16n");
+  // Tone.Transport.scheduleRepeat(time => {
+  //   $rows.forEach((row, index) => {
+  //     let sampler = samplers[index];
+  //     let note = row[beat];
+  //     if (note.active) 
+  //       //sampler.volume.value = -6;
+  //      sampler.start(time, "16n" );
+  //     //triggerAttackRelease(note.note, "16n", time);
+  //   });
+  //   beat = (beat + 1) % 16;
+  // }, "16n");
 
   const handleNoteClick = (rowIndex, noteIndex) => {
-    rows[rowIndex][noteIndex].active = !rows[rowIndex][noteIndex].active;
+    rows.update((rows) => {
+      const updatedRows = [...rows];
+      updatedRows[rowIndex][noteIndex].active =
+        !updatedRows[rowIndex][noteIndex].active;
+      return updatedRows;
+    });
   };
 
-  const handlePlayClick = () => {
-    if (!isPlaying) Tone.start();
+  const handlePlayClick = async () => {
+    if (!isPlaying) await Tone.start();
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start();
     isPlaying = true;
-    gridUpdateInterval = startGridUpdate(
-      updateInterval,
-      gridUpdateInterval,
-      rows,
-    );
   };
+
+ let repeatId;
+
+  onMount(() => {
+    repeatId = Tone.Transport.scheduleRepeat((time) => {
+      $rows.forEach((row, index) => {
+        const sampler = samplers[index];
+        const note = row[beat];
+        if (note.active) sampler.start(time);
+      });
+      beat = (beat + 1) % 16;
+    }, "16n");
+
+    return () => {
+      Tone.Transport.clear(repeatId);
+    };
+  });
 
   const handleStopClick = () => {
     stopGridUpdate(gridUpdateInterval);
@@ -99,8 +114,24 @@
     isPlaying = false;
   };
 
-  $: if (isPlaying) {
-    Tone.Transport.bpm.value = bpm;
+  $: if (isPlaying && !gridUpdateInterval) {
+    gridUpdateInterval = startGridUpdate(updateInterval, gridUpdateInterval, rows);
+  }
+
+  function updateRows() {
+    rows.update((rows) => updateGrid(rows));
+  }
+
+  function startGridUpdate(interval, gridUpdateInterval, rows) {
+    clearInterval(gridUpdateInterval);
+    gridUpdateInterval = setInterval(() => {
+      updateRows(); // Update rows according to Conway's rules
+    }, interval);
+    return gridUpdateInterval;
+  }
+
+  function stopGridUpdate(gridUpdateInterval) {
+    clearInterval(gridUpdateInterval);
   }
 </script>
 
@@ -110,7 +141,7 @@
   <label for="bpm">{bpm} BPM</label>
   <input type="range" id="bpm" min="60" max="240" bind:value={bpm} />
   {#if isPlaying}
-    <button on:click={handleStopClick}>Stop</button>
+    <button on:click={handleStopClick}>Stop</button>  
   {:else}
     <button on:click={handlePlayClick}>Play</button>
   {/if}
@@ -118,9 +149,9 @@
 
 <div class="sequencer">
   {#each beatIndicators as beatIndicator, bi}
-    <div class="beat-indicator {bi === beat - 1 ? 'live' : ''}"></div>
+    <div class="beat-indicator {bi === (beat + 15) % 16 ? 'live' : ''}"></div>
   {/each}
-  {#each rows as row, i}
+  {#each $rows as row, i}
     {#each row as note, j}
       <button
         on:click={() => handleNoteClick(i, j)}
